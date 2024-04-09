@@ -1,0 +1,43 @@
+pip install scikit-surprise
+from surprise import Dataset, Reader, KNNBasic
+from surprise.model_selection import cross_validate
+
+# Define the format of the dataset
+reader = Reader(line_format='user item rating', sep=',', rating_scale=(1, 5))
+
+# Load the dataset (replace 'ratings.csv' with your dataset)
+data = Dataset.load_from_file('ratings.csv', reader=reader)
+
+# Use the KNNBasic algorithm with user-based collaborative filtering
+sim_options = {
+    'name': 'cosine',  # Use cosine similarity
+    'user_based': True  # User-based collaborative filtering
+}
+knn = KNNBasic(sim_options=sim_options)
+
+# Perform cross-validation to evaluate the performance of the algorithm
+cross_validate(knn, data, measures=['RMSE', 'MAE'], cv=5, verbose=True)
+
+# Train the algorithm on the entire dataset
+trainset = data.build_full_trainset()
+knn.fit(trainset)
+
+# Get recommendations for a user (replace 'user_id' with the ID of the user)
+user_id = 'user_id'
+top_n = 10  # Number of recommendations
+user_ratings = trainset.ur[trainset.to_inner_uid(user_id)]
+items_rated_by_user = {trainset.to_raw_iid(iid) for (iid, _) in user_ratings}
+items_not_rated_by_user = set(trainset.all_items()) - items_rated_by_user
+
+# Predict ratings for items not rated by the user
+item_scores = [(iid, knn.predict(user_id, trainset.to_inner_iid(iid)).est) for iid in items_not_rated_by_user]
+
+# Sort the predictions by estimated rating
+item_scores.sort(key=lambda x: x[1], reverse=True)
+
+# Get the top N recommendations
+top_recommendations = item_scores[:top_n]
+
+print("Top recommendations for user", user_id)
+for item_id, score in top_recommendations:
+    print("Item:", item_id, "Score:", round(score, 2))
